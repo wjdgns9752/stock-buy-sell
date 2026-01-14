@@ -10,23 +10,57 @@ const form = document.getElementById('strategy-form');
 const botList = document.getElementById('bot-list');
 const tradeLog = document.getElementById('trade-log');
 const toggleSimBtn = document.getElementById('toggleSim');
+const btnSearch = document.getElementById('btn-search');
+const inputCode = document.getElementById('stockCode');
+
+// --- API Logic ---
+async function fetchStockPrice(symbol) {
+    try {
+        // Using a CORS proxy to bypass browser restrictions
+        const proxyUrl = 'https://corsproxy.io/?';
+        const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+        
+        const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
+        const data = await response.json();
+        
+        const result = data.chart.result[0];
+        const meta = result.meta;
+        
+        // Extract relevant data
+        // For Korean stocks, currency is KRW.
+        const price = meta.regularMarketPrice;
+        // Attempt to find a readable name if possible, or use symbol
+        // Yahoo chart API often returns 'symbol' as the name if detailed profile isn't fetched.
+        // We might just use the symbol or a generic name if not available, 
+        // but often 'longName' or 'shortName' isn't in the chart meta directly for all symbols.
+        // Let's check what we have. meta usually has 'symbol', 'exchangeName', 'instrumentType', 'currency'.
+        // We will default name to symbol if not found.
+        const name = symbol; 
+        
+        return { price, name };
+    } catch (error) {
+        console.error("Failed to fetch stock data:", error);
+        alert("주식 정보를 가져오는데 실패했습니다. 올바른 티커(예: 005930.KS)인지 확인해주세요.");
+        return null;
+    }
+}
 
 // --- Core Logic ---
 
 class TradeBot {
-    constructor(id, name, basePrice, buyThreshold, sellThreshold, quantity) {
+    constructor(id, symbol, name, basePrice, buyThreshold, sellThreshold, quantity) {
         this.id = id;
+        this.symbol = symbol;
         this.name = name;
-        this.basePrice = parseFloat(basePrice); // Initial reference price
+        this.basePrice = parseFloat(basePrice);
         this.currentPrice = this.basePrice;
         
-        // Percentages: -2.0 means drop 2%, 3.5 means rise 3.5%
         this.buyThreshold = parseFloat(buyThreshold); 
         this.sellThreshold = parseFloat(sellThreshold);
         this.quantity = parseInt(quantity);
 
-        this.status = 'waiting'; // waiting -> holding -> sold
-        this.buyPrice = 0; // Price at which we bought
+        this.status = 'waiting'; 
+        this.buyPrice = 0; 
     }
 
     updatePrice(newPrice) {
@@ -36,18 +70,12 @@ class TradeBot {
 
     checkConditions() {
         if (this.status === 'waiting') {
-            // Check for Buy Condition (Current Price <= Base Price * (1 - threshold/100))
-            // Note: buyThreshold is typically negative (e.g. -2)
-            // Let's assume user inputs "-2" for a 2% drop.
             const targetBuyPrice = this.basePrice * (1 + (this.buyThreshold / 100));
-            
             if (this.currentPrice <= targetBuyPrice) {
                 this.executeBuy();
             }
         } else if (this.status === 'holding') {
-            // Check for Sell Condition (Current Price >= Buy Price * (1 + threshold/100))
             const targetSellPrice = this.buyPrice * (1 + (this.sellThreshold / 100));
-
             if (this.currentPrice >= targetSellPrice) {
                 this.executeSell();
             }
@@ -64,10 +92,6 @@ class TradeBot {
     executeSell() {
         this.status = 'sold';
         addLog(this.name, '매도', this.currentPrice, this.quantity);
-        // Reset to waiting? or keep sold? Let's keep sold for this prototype.
-        // Optional: Reset to waiting with new base price?
-        // this.status = 'waiting'; 
-        // this.basePrice = this.currentPrice;
         renderBots();
     }
 }
@@ -77,23 +101,43 @@ class TradeBot {
 function init() {
     loadState();
     renderBots();
-    startSimulation();
+    startSimulation(); // Keeping simulation for demo as real-time streaming requires WebSocket/Backend
     
     form.addEventListener('submit', handleFormSubmit);
     toggleSimBtn.addEventListener('click', toggleSimulation);
+    
+    // Search Button Handler
+    btnSearch.addEventListener('click', async () => {
+        const symbol = inputCode.value.trim().toUpperCase();
+        if (!symbol) {
+            alert("종목 코드를 입력해주세요.");
+            return;
+        }
+        
+        btnSearch.textContent = "조회중...";
+        const data = await fetchStockPrice(symbol);
+        btnSearch.textContent = "조회";
+        
+        if (data) {
+            document.getElementById('stockName').value = data.name; // Currently just symbol, could be improved with another API
+            document.getElementById('basePrice').value = data.price;
+        }
+    });
 }
 
 function handleFormSubmit(e) {
     e.preventDefault();
     
-    const name = document.getElementById('stockName').value;
+    const symbol = document.getElementById('stockCode').value.toUpperCase();
+    const name = document.getElementById('stockName').value || symbol;
     const basePrice = document.getElementById('basePrice').value;
     const buyThreshold = document.getElementById('buyThreshold').value;
     const sellThreshold = document.getElementById('sellThreshold').value;
     const quantity = document.getElementById('quantity').value;
 
     const newBot = new TradeBot(
-        Date.now(), 
+        Date.now(),
+        symbol,
         name, 
         basePrice, 
         buyThreshold, 
@@ -113,26 +157,23 @@ function renderBots() {
     state.bots.forEach(bot => {
         const row = document.createElement('tr');
         
-        // Calculate change % from base (or buy price if holding)
         const refPrice = bot.status === 'holding' ? bot.buyPrice : bot.basePrice;
         const change = ((bot.currentPrice - refPrice) / refPrice) * 100;
         const changeClass = change > 0 ? 'up' : (change < 0 ? 'down' : '');
         const changeSign = change > 0 ? '+' : '';
 
-        // Status Badge logic
         let statusClass = 'sold';
         let statusText = '완료';
         if (bot.status === 'waiting') { statusClass = 'buying'; statusText = '매수 대기'; }
         if (bot.status === 'holding') { statusClass = 'holding'; statusText = '보유 중'; }
 
-        // Targets
         const targetBuy = Math.floor(bot.basePrice * (1 + (bot.buyThreshold / 100))).toLocaleString();
         const targetSell = bot.status === 'holding' 
             ? Math.floor(bot.buyPrice * (1 + (bot.sellThreshold / 100))).toLocaleString()
             : '-';
 
         row.innerHTML = `
-            <td>${bot.name}</td>
+            <td>${bot.name} (${bot.symbol})</td>
             <td class="${changeClass}">${Math.floor(bot.currentPrice).toLocaleString()}</td>
             <td class="${changeClass}">${changeSign}${change.toFixed(2)}%</td>
             <td><span class="status-badge ${statusClass}">${statusText}</span></td>
@@ -156,7 +197,6 @@ function addLog(name, type, price, qty) {
         ${name} ${qty}주 @ ${Math.floor(price).toLocaleString()}원 (총 ${total}원)
     `;
     
-    // Remove empty log message if present
     const emptyMsg = tradeLog.querySelector('.empty-log');
     if (emptyMsg) emptyMsg.remove();
     
@@ -167,19 +207,28 @@ function addLog(name, type, price, qty) {
 
 function startSimulation() {
     if (state.simulationInterval) clearInterval(state.simulationInterval);
-    state.simulationInterval = setInterval(() => {
+    state.simulationInterval = setInterval(async () => {
         if (!state.isSimulationRunning) return;
 
+        // For this demo, we can either continue random simulation OR try to fetch real prices for all bots.
+        // Fetching real prices every 2 seconds for many bots might hit API limits.
+        // Let's stick to random simulation for the 'active monitoring' visual effect,
+        // BUT we could add a button to "Refresh All Prices" later.
+        // For now, let's keep the random fluctuation to demonstrate the "trigger" logic 
+        // since the market might be closed or not moving fast enough for a demo.
+        
         state.bots.forEach(bot => {
             if (bot.status === 'sold') return;
 
-            // Random fluctuation between -1.5% and +1.5%
+            // Hybrid: 90% chance of random noise, 10% chance (or manual) could be real fetch?
+            // Let's stick to pure simulation for the 'auto-trading' demo part 
+            // because waiting for real market movements takes too long for user testing.
             const fluctuation = (Math.random() - 0.5) * 0.03; 
             const newPrice = bot.currentPrice * (1 + fluctuation);
             bot.updatePrice(newPrice);
         });
         renderBots();
-    }, 2000); // Update every 2 seconds
+    }, 2000); 
 }
 
 function toggleSimulation() {
@@ -190,24 +239,15 @@ function toggleSimulation() {
 
 // --- Persistence ---
 function saveState() {
-    // Only save config, not current temporary price states strictly
-    // For prototype, we verify simple JSON stringify
-   // localStorage.setItem('stockBots', JSON.stringify(state.bots));
+    // localStorage.setItem('stockBots', JSON.stringify(state.bots));
 }
 
 function loadState() {
-    // const saved = localStorage.getItem('stockBots');
-    // if (saved) {
-        // We would need to re-instantiate classes here. 
-        // Skipping for simplicity in this turn, fresh start on reload.
-    // }
 }
 
-// Expose delete function to window for HTML access
 window.deleteBot = (id) => {
     state.bots = state.bots.filter(b => b.id !== id);
     renderBots();
 };
 
-// Start
 init();
