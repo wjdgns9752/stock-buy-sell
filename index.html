@@ -1,14 +1,92 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hello World</title>
-  <link href='/style.css' rel='stylesheet'>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockSell - 한국 주식 자동매매 시스템</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <h1>Hello, world!</h1>
-  <button onclick="console.log('hello');">Press me</button>
-  <script defer type="text/javascript" src="/main.js"></script>
+    <div class="app-container">
+        <header class="top-bar">
+            <div class="logo">StockSell <span>Auto</span></div>
+            <div class="status-indicator">
+                <span class="dot active"></span> 시스템 가동중
+            </div>
+        </header>
+
+        <main class="dashboard-grid">
+            <!-- Left Panel: Strategy Configuration -->
+            <section class="card config-panel">
+                <h2>📈 매매 전략 설정</h2>
+                <form id="strategy-form">
+                    <div class="input-group">
+                        <label>종목명</label>
+                        <input type="text" id="stockName" placeholder="예: 삼성전자" required>
+                    </div>
+                    <div class="input-group">
+                        <label>기준 가격 (KRW)</label>
+                        <input type="number" id="basePrice" placeholder="현재가 입력" required>
+                    </div>
+                    <div class="row">
+                        <div class="input-group">
+                            <label>매수 조건 (%)</label>
+                            <input type="number" id="buyThreshold" placeholder="-2.0" step="0.1" required>
+                            <span class="help-text">기준가 대비 하락 시</span>
+                        </div>
+                        <div class="input-group">
+                            <label>매도 조건 (%)</label>
+                            <input type="number" id="sellThreshold" placeholder="3.5" step="0.1" required>
+                            <span class="help-text">매수가 대비 상승 시</span>
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label>주문 수량 (주)</label>
+                        <input type="number" id="quantity" value="10" min="1" required>
+                    </div>
+                    <button type="submit" class="btn-primary">전략 등록</button>
+                </form>
+            </section>
+
+            <!-- Center Panel: Live Market & Active Bots -->
+            <section class="card monitoring-panel">
+                <h2>⚡ 실시간 감시 현황 (시뮬레이션)</h2>
+                <div class="table-container">
+                    <table id="bot-table">
+                        <thead>
+                            <tr>
+                                <th>종목</th>
+                                <th>현재가</th>
+                                <th>변동률</th>
+                                <th>상태</th>
+                                <th>목표 매수</th>
+                                <th>목표 매도</th>
+                                <th>관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bot-list">
+                            <!-- Bots will be added here dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="simulation-controls">
+                    <button id="toggleSim" class="btn-secondary">시뮬레이션 일시정지</button>
+                    <p class="sim-note">* 실제 API 연동 전 테스트를 위한 가격 시뮬레이션 모드입니다.</p>
+                </div>
+            </section>
+
+            <!-- Right Panel: Transaction Log -->
+            <section class="card history-panel">
+                <h2>📜 체결 내역</h2>
+                <ul id="trade-log" class="log-list">
+                    <!-- Logs will appear here -->
+                    <li class="empty-log">체결 내역이 없습니다.</li>
+                </ul>
+            </section>
+        </main>
+    </div>
+
+    <script type="module" src="main.js"></script>
 </body>
 </html>
