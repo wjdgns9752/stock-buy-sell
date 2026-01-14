@@ -7,6 +7,13 @@
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/generative-ai": "https://esm.run/@google/generative-ai"
+        }
+      }
+    </script>
 </head>
 <body>
     <div class="app-container">
@@ -20,7 +27,14 @@
         <main class="dashboard-grid">
             <!-- Market Overview Panel (New) -->
             <section class="card market-panel">
-                <h2>📊 실시간 시장 급등/급락 (Naver Finance)</h2>
+                <div class="panel-header-row">
+                    <h2>📊 실시간 시장 동향 & AI 분석</h2>
+                    <button id="btn-analyze" class="btn-ai">✨ Gemini Market 분석</button>
+                </div>
+                <div id="ai-result" class="ai-result-box" style="display:none;">
+                    <strong>🤖 Gemini 2.0 Flash의 분석:</strong>
+                    <p id="ai-text">분석 중...</p>
+                </div>
                 <div class="market-content">
                     <div class="chart-container">
                         <canvas id="marketChart"></canvas>

@@ -11,15 +11,76 @@ const botList = document.getElementById('bot-list');
 const tradeLog = document.getElementById('trade-log');
 const toggleSimBtn = document.getElementById('toggleSim');
 const btnSearch = document.getElementById('btn-search');
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// State Management
+const state = {
+    bots: [],
+    isSimulationRunning: true,
+    simulationInterval: null,
+    marketData: { risers: [], fallers: [] }
+};
+
+// DOM Elements
+const form = document.getElementById('strategy-form');
+const botList = document.getElementById('bot-list');
+const tradeLog = document.getElementById('trade-log');
+const toggleSimBtn = document.getElementById('toggleSim');
+const btnSearch = document.getElementById('btn-search');
 const inputCode = document.getElementById('stockCode');
+const btnAnalyze = document.getElementById('btn-analyze');
+const aiResultBox = document.getElementById('ai-result');
+const aiText = document.getElementById('ai-text');
+
+// --- AI Logic (Gemini) ---
+async function analyzeMarketWithGemini() {
+    const apiKey = prompt("Gemini API Key를 입력해주세요 (브라우저에 저장됩니다):", localStorage.getItem("gemini_api_key") || "");
+    if (!apiKey) return;
+    
+    localStorage.setItem("gemini_api_key", apiKey);
+    
+    aiResultBox.style.display = "block";
+    aiText.textContent = "시장 데이터를 분석하고 있습니다...";
+
+    try {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        // Using a high-performance model. 
+        // Note: 'gemini-3' is not a valid model ID yet. Using 'gemini-1.5-flash' for speed/efficiency.
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        const risersText = state.marketData.risers.map(i => `${i.nm} (+${i.rate}%)`).join(", ");
+        const fallersText = state.marketData.fallers.map(i => `${i.nm} (${i.rate}%)`).join(", ");
+        
+        const prompt = `
+            너는 주식 시장 전문가야. 현재 한국 시장(KOSPI)의 실시간 급등/급락 종목은 다음과 같아.
+            
+            🔥 급등 Top 5: ${risersText}
+            💧 급락 Top 5: ${fallersText}
+            
+            이 데이터를 바탕으로 현재 시장의 분위기가 어떤지(강세/약세/혼조세), 
+            그리고 단타 매매 전략으로 어떤 섹터나 종목에 주목하면 좋을지 3줄 요약으로 간단하고 명확하게 조언해줘.
+            말투는 전문적이고 친절하게 해줘.
+        `;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+        
+        aiText.innerHTML = text.replace(/\n/g, "<br>");
+        
+    } catch (error) {
+        console.error("Gemini Error:", error);
+        aiText.textContent = "분석 중 오류가 발생했습니다. API Key를 확인하거나 잠시 후 다시 시도해주세요.";
+    }
+}
+
+btnAnalyze.addEventListener('click', analyzeMarketWithGemini);
 
 // --- Naver Finance API & Chart Logic ---
 async function updateMarketDashboard() {
     try {
         const proxyUrl = 'https://corsproxy.io/?';
-        // Fetch Top Risers (KOSPI)
         const riseUrl = 'https://m.stock.naver.com/api/json/sise/siseListJson.nhn?menu=rise&sosok=0';
-        // Fetch Top Fallers (KOSPI)
         const fallUrl = 'https://m.stock.naver.com/api/json/sise/siseListJson.nhn?menu=fall&sosok=0';
 
         const [riseRes, fallRes] = await Promise.all([
@@ -30,9 +91,10 @@ async function updateMarketDashboard() {
         const riseData = await riseRes.json();
         const fallData = await fallRes.json();
 
-        // Extract Top 5 items
         const topRisers = riseData.result.itemList.slice(0, 5);
         const topFallers = fallData.result.itemList.slice(0, 5);
+        
+        state.marketData = { risers: topRisers, fallers: topFallers };
 
         renderMoversList(topRisers, topFallers);
         renderMarketChart(topRisers, topFallers);
