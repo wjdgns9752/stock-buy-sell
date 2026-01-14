@@ -1,16 +1,3 @@
-// State Management
-const state = {
-    bots: [],
-    isSimulationRunning: true,
-    simulationInterval: null
-};
-
-// DOM Elements
-const form = document.getElementById('strategy-form');
-const botList = document.getElementById('bot-list');
-const tradeLog = document.getElementById('trade-log');
-const toggleSimBtn = document.getElementById('toggleSim');
-const btnSearch = document.getElementById('btn-search');
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // State Management
@@ -26,11 +13,129 @@ const form = document.getElementById('strategy-form');
 const botList = document.getElementById('bot-list');
 const tradeLog = document.getElementById('trade-log');
 const toggleSimBtn = document.getElementById('toggleSim');
-const btnSearch = document.getElementById('btn-search');
-const inputCode = document.getElementById('stockCode');
 const btnAnalyze = document.getElementById('btn-analyze');
 const aiResultBox = document.getElementById('ai-result');
 const aiText = document.getElementById('ai-text');
+
+// New Search Elements
+const searchInput = document.getElementById('searchInput');
+const searchResults = document.getElementById('searchResults');
+const stockInfoCard = document.getElementById('selectedStockInfo');
+const infoName = document.getElementById('infoName');
+const infoCode = document.getElementById('infoCode');
+const infoPrice = document.getElementById('infoPrice');
+const infoChange = document.getElementById('infoChange');
+const infoTime = document.getElementById('infoTime');
+const btnAddStrategy = document.getElementById('btnAddStrategy');
+const hiddenCode = document.getElementById('stockCode');
+const hiddenName = document.getElementById('stockName');
+const hiddenBasePrice = document.getElementById('basePrice');
+
+// --- Naver Stock Search & Data Logic ---
+
+// 1. Search AutoComplete
+let debounceTimer;
+if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(debounceTimer);
+        const query = e.target.value.trim();
+        
+        if (query.length < 1) {
+            searchResults.style.display = 'none';
+            return;
+        }
+
+        debounceTimer = setTimeout(() => fetchStockSearchResults(query), 300);
+    });
+}
+
+async function fetchStockSearchResults(query) {
+    try {
+        const proxyUrl = 'https://corsproxy.io/?';
+        // Naver Mobile AutoComplete API
+        const targetUrl = `https://ac.finance.naver.com/ac?q=${encodeURIComponent(query)}&q_enc=euc-kr&st=111&r_format=json&r_enc=utf-8`;
+        
+        const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
+        const data = await response.json();
+        
+        const items = data.items[0]; 
+        renderSearchResults(items);
+
+    } catch (error) {
+        console.error("Search failed:", error);
+    }
+}
+
+function renderSearchResults(items) {
+    searchResults.innerHTML = '';
+    if (!items || items.length === 0) {
+        searchResults.style.display = 'none';
+        return;
+    }
+
+    items.forEach(item => {
+        // item[0] = code, item[1] = name, item[2] = market (KOSPI/KOSDAQ)
+        const code = item[0];
+        const name = item[1];
+        const market = item[2];
+
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="search-match">${name}</span> <span class="search-sub">${code} (${market})</span>`;
+        li.onclick = () => selectStock(code, name);
+        searchResults.appendChild(li);
+    });
+
+    searchResults.style.display = 'block';
+}
+
+// 2. Select Stock & Fetch Details
+async function selectStock(code, name) {
+    if (searchInput) searchInput.value = name; 
+    searchResults.style.display = 'none'; 
+    
+    // Fetch Real-time Price
+    await fetchStockDetails(code, name);
+}
+
+async function fetchStockDetails(code, name) {
+    try {
+        const proxyUrl = 'https://corsproxy.io/?';
+        // Naver Stock Basic Info API
+        const targetUrl = `https://m.stock.naver.com/api/stock/${code}/basic`;
+        
+        const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
+        const data = await response.json();
+        
+        const price = data.closePrice.replace(/,/g, ''); // Remove commas
+        const changeRate = parseFloat(data.fluctuationRate);
+
+        // Update UI Card
+        infoName.textContent = name;
+        infoCode.textContent = code;
+        infoPrice.textContent = parseInt(price).toLocaleString();
+        
+        const isUp = changeRate > 0;
+        const isDown = changeRate < 0;
+        infoChange.textContent = `${isUp ? '+' : ''}${changeRate}%`;
+        infoChange.className = `change-rate ${isUp ? 'up' : (isDown ? 'down' : '')}`;
+        
+        const now = new Date();
+        infoTime.textContent = now.toLocaleTimeString();
+
+        stockInfoCard.style.display = 'block';
+        btnAddStrategy.disabled = false;
+        btnAddStrategy.textContent = "전략 등록";
+
+        // Fill Hidden Inputs for Strategy Form
+        hiddenCode.value = code;
+        hiddenName.value = name;
+        hiddenBasePrice.value = price;
+
+    } catch (error) {
+        console.error("Details fetch failed:", error);
+        alert("상세 시세 정보를 가져오는데 실패했습니다.");
+    }
+}
 
 // --- AI Logic (Gemini) ---
 async function analyzeMarketWithGemini() {
@@ -44,8 +149,6 @@ async function analyzeMarketWithGemini() {
 
     try {
         const genAI = new GoogleGenerativeAI(apiKey);
-        // Using a high-performance model. 
-        // Note: 'gemini-3' is not a valid model ID yet. Using 'gemini-1.5-flash' for speed/efficiency.
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
         const risersText = state.marketData.risers.map(i => `${i.nm} (+${i.rate}%)`).join(", ");
@@ -74,7 +177,9 @@ async function analyzeMarketWithGemini() {
     }
 }
 
-btnAnalyze.addEventListener('click', analyzeMarketWithGemini);
+if (btnAnalyze) {
+    btnAnalyze.addEventListener('click', analyzeMarketWithGemini);
+}
 
 // --- Naver Finance API & Chart Logic ---
 async function updateMarketDashboard() {
@@ -101,13 +206,16 @@ async function updateMarketDashboard() {
 
     } catch (error) {
         console.error("Failed to fetch market data:", error);
-        document.getElementById('top-risers').innerHTML = '<li>데이터 로드 실패</li>';
+        const risersEl = document.getElementById('top-risers');
+        if (risersEl) risersEl.innerHTML = '<li>데이터 로드 실패</li>';
     }
 }
 
 function renderMoversList(risers, fallers) {
     const riseList = document.getElementById('top-risers');
     const fallList = document.getElementById('top-fallers');
+
+    if (!riseList || !fallList) return;
 
     const createItem = (item, isRise) => `
         <li>
@@ -125,13 +233,14 @@ function renderMoversList(risers, fallers) {
 let marketChartInstance = null;
 
 function renderMarketChart(risers, fallers) {
-    const ctx = document.getElementById('marketChart').getContext('2d');
+    const ctxEl = document.getElementById('marketChart');
+    if (!ctxEl) return;
+    const ctx = ctxEl.getContext('2d');
     
-    // Combine data for chart: Top 3 Risers and Top 3 Fallers
     const chartItems = [...risers.slice(0, 5), ...fallers.slice(0, 5)];
     const labels = chartItems.map(item => item.nm);
     const dataPoints = chartItems.map(item => parseFloat(item.rate));
-    const colors = dataPoints.map(val => val >= 0 ? '#ff3d00' : '#3d5afe'); // Red for + (KR), Blue for -
+    const colors = dataPoints.map(val => val >= 0 ? '#ff3d00' : '#3d5afe'); 
 
     if (marketChartInstance) {
         marketChartInstance.destroy();
@@ -175,38 +284,6 @@ function renderMarketChart(risers, fallers) {
             }
         }
     });
-}
-
-// --- API Logic ---
-async function fetchStockPrice(symbol) {
-    try {
-        // Using a CORS proxy to bypass browser restrictions
-        const proxyUrl = 'https://corsproxy.io/?';
-        const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
-        
-        const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
-        const data = await response.json();
-        
-        const result = data.chart.result[0];
-        const meta = result.meta;
-        
-        // Extract relevant data
-        // For Korean stocks, currency is KRW.
-        const price = meta.regularMarketPrice;
-        // Attempt to find a readable name if possible, or use symbol
-        // Yahoo chart API often returns 'symbol' as the name if detailed profile isn't fetched.
-        // We might just use the symbol or a generic name if not available, 
-        // but often 'longName' or 'shortName' isn't in the chart meta directly for all symbols.
-        // Let's check what we have. meta usually has 'symbol', 'exchangeName', 'instrumentType', 'currency'.
-        // We will default name to symbol if not found.
-        const name = symbol; 
-        
-        return { price, name };
-    } catch (error) {
-        console.error("Failed to fetch stock data:", error);
-        alert("주식 정보를 가져오는데 실패했습니다. 올바른 티커(예: 005930.KS)인지 확인해주세요.");
-        return null;
-    }
 }
 
 // --- Core Logic ---
@@ -266,26 +343,15 @@ function init() {
     loadState();
     renderBots();
     startSimulation(); 
-    updateMarketDashboard(); // Load market data on startup
+    updateMarketDashboard(); 
     
-    form.addEventListener('submit', handleFormSubmit);
-    toggleSimBtn.addEventListener('click', toggleSimulation);
+    if (form) form.addEventListener('submit', handleFormSubmit);
+    if (toggleSimBtn) toggleSimBtn.addEventListener('click', toggleSimulation);
     
-    // Search Button Handler
-    btnSearch.addEventListener('click', async () => {
-        const symbol = inputCode.value.trim().toUpperCase();
-        if (!symbol) {
-            alert("종목 코드를 입력해주세요.");
-            return;
-        }
-        
-        btnSearch.textContent = "조회중...";
-        const data = await fetchStockPrice(symbol);
-        btnSearch.textContent = "조회";
-        
-        if (data) {
-            document.getElementById('stockName').value = data.name; // Currently just symbol, could be improved with another API
-            document.getElementById('basePrice').value = data.price;
+    // Close search results when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.search-box') && searchResults) {
+            searchResults.style.display = 'none';
         }
     });
 }
@@ -293,9 +359,16 @@ function init() {
 function handleFormSubmit(e) {
     e.preventDefault();
     
-    const symbol = document.getElementById('stockCode').value.toUpperCase();
-    const name = document.getElementById('stockName').value || symbol;
-    const basePrice = document.getElementById('basePrice').value;
+    // Get values from hidden inputs populated by search
+    const symbol = hiddenCode.value;
+    const name = hiddenName.value;
+    const basePrice = hiddenBasePrice.value;
+    
+    if (!symbol || !basePrice) {
+        alert("종목을 검색하여 선택해주세요.");
+        return;
+    }
+
     const buyThreshold = document.getElementById('buyThreshold').value;
     const sellThreshold = document.getElementById('sellThreshold').value;
     const quantity = document.getElementById('quantity').value;
@@ -313,10 +386,16 @@ function handleFormSubmit(e) {
     state.bots.push(newBot);
     saveState();
     renderBots();
+    
     form.reset();
+    document.getElementById('quantity').value = "10";
+    stockInfoCard.style.display = 'none';
+    btnAddStrategy.disabled = true;
+    searchInput.value = '';
 }
 
 function renderBots() {
+    if (!botList) return;
     botList.innerHTML = '';
     
     state.bots.forEach(bot => {
@@ -351,6 +430,7 @@ function renderBots() {
 }
 
 function addLog(name, type, price, qty) {
+    if (!tradeLog) return;
     const li = document.createElement('li');
     li.className = 'log-item';
     const time = new Date().toLocaleTimeString();
@@ -374,20 +454,9 @@ function startSimulation() {
     if (state.simulationInterval) clearInterval(state.simulationInterval);
     state.simulationInterval = setInterval(async () => {
         if (!state.isSimulationRunning) return;
-
-        // For this demo, we can either continue random simulation OR try to fetch real prices for all bots.
-        // Fetching real prices every 2 seconds for many bots might hit API limits.
-        // Let's stick to random simulation for the 'active monitoring' visual effect,
-        // BUT we could add a button to "Refresh All Prices" later.
-        // For now, let's keep the random fluctuation to demonstrate the "trigger" logic 
-        // since the market might be closed or not moving fast enough for a demo.
         
         state.bots.forEach(bot => {
             if (bot.status === 'sold') return;
-
-            // Hybrid: 90% chance of random noise, 10% chance (or manual) could be real fetch?
-            // Let's stick to pure simulation for the 'auto-trading' demo part 
-            // because waiting for real market movements takes too long for user testing.
             const fluctuation = (Math.random() - 0.5) * 0.03; 
             const newPrice = bot.currentPrice * (1 + fluctuation);
             bot.updatePrice(newPrice);
@@ -398,13 +467,14 @@ function startSimulation() {
 
 function toggleSimulation() {
     state.isSimulationRunning = !state.isSimulationRunning;
-    toggleSimBtn.textContent = state.isSimulationRunning ? '시뮬레이션 일시정지' : '시뮬레이션 재개';
-    toggleSimBtn.classList.toggle('paused', !state.isSimulationRunning);
+    if (toggleSimBtn) {
+        toggleSimBtn.textContent = state.isSimulationRunning ? '시뮬레이션 일시정지' : '시뮬레이션 재개';
+        toggleSimBtn.classList.toggle('paused', !state.isSimulationRunning);
+    }
 }
 
 // --- Persistence ---
 function saveState() {
-    // localStorage.setItem('stockBots', JSON.stringify(state.bots));
 }
 
 function loadState() {

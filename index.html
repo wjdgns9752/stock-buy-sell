@@ -55,40 +55,54 @@
             <!-- Left Panel: Strategy Configuration -->
             <section class="card config-panel">
                 <h2>📈 매매 전략 설정</h2>
+                
+                <!-- 1. Stock Search & Info -->
+                <div class="search-section">
+                    <label>종목 검색</label>
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="종목명 또는 코드 입력 (예: 삼성전자)" autocomplete="off">
+                        <button id="btn-search-manual" class="btn-secondary">검색</button>
+                    </div>
+                    <ul id="searchResults" class="search-results"></ul>
+                </div>
+
+                <div id="selectedStockInfo" class="stock-info-card" style="display:none;">
+                    <div class="info-header">
+                        <h3 id="infoName">삼성전자</h3>
+                        <span id="infoCode" class="code-badge">005930</span>
+                    </div>
+                    <div class="info-price-row">
+                        <span id="infoPrice" class="current-price">72,500</span>
+                        <span class="currency">KRW</span>
+                        <span id="infoChange" class="change-rate up">+1.2%</span>
+                    </div>
+                    <p class="updated-time">최근 조회: <span id="infoTime">14:30:00</span></p>
+                </div>
+
+                <!-- 2. Strategy Form -->
                 <form id="strategy-form">
-                    <div class="input-group search-group">
-                        <label>종목 코드 (Yahoo Finance)</label>
+                    <!-- Hidden inputs to store selected stock data -->
+                    <input type="hidden" id="stockCode">
+                    <input type="hidden" id="stockName">
+                    <input type="hidden" id="basePrice">
+
+                    <div class="strategy-inputs">
                         <div class="row">
-                            <input type="text" id="stockCode" placeholder="예: 005930.KS" required>
-                            <button type="button" id="btn-search" class="btn-secondary">조회</button>
-                        </div>
-                        <span class="help-text">한국 주식은 .KS(코스피) 또는 .KQ(코스닥) 붙임</span>
-                    </div>
-                    <div class="input-group">
-                        <label>종목명</label>
-                        <input type="text" id="stockName" placeholder="조회 시 자동 입력" readonly>
-                    </div>
-                    <div class="input-group">
-                        <label>기준 가격 (KRW)</label>
-                        <input type="number" id="basePrice" placeholder="조회 시 자동 입력" required>
-                    </div>
-                    <div class="row">
-                        <div class="input-group">
-                            <label>매수 조건 (%)</label>
-                            <input type="number" id="buyThreshold" placeholder="-2.0" step="0.1" required>
-                            <span class="help-text">기준가 대비 하락 시</span>
+                            <div class="input-group">
+                                <label>매수 조건 (%)</label>
+                                <input type="number" id="buyThreshold" placeholder="-2.0" step="0.1" required>
+                            </div>
+                            <div class="input-group">
+                                <label>매도 조건 (%)</label>
+                                <input type="number" id="sellThreshold" placeholder="3.5" step="0.1" required>
+                            </div>
                         </div>
                         <div class="input-group">
-                            <label>매도 조건 (%)</label>
-                            <input type="number" id="sellThreshold" placeholder="3.5" step="0.1" required>
-                            <span class="help-text">매수가 대비 상승 시</span>
+                            <label>주문 수량 (주)</label>
+                            <input type="number" id="quantity" value="10" min="1" required>
                         </div>
                     </div>
-                    <div class="input-group">
-                        <label>주문 수량 (주)</label>
-                        <input type="number" id="quantity" value="10" min="1" required>
-                    </div>
-                    <button type="submit" class="btn-primary">전략 등록</button>
+                    <button type="submit" class="btn-primary" id="btnAddStrategy" disabled>전략 등록 (종목을 먼저 선택하세요)</button>
                 </form>
             </section>
 

@@ -1,19 +1,128 @@
 /* Dashboard Grid */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 320px 1fr 300px;
-    grid-template-rows: auto 1fr; /* First row for Market, second for Tools */
+    grid-template-columns: 350px 1fr 300px; /* Increased left panel width */
+    grid-template-rows: auto 1fr;
     gap: 1rem;
     padding: 1rem;
     height: 100%;
-    overflow-y: auto; /* Allow scrolling for the whole dashboard if needed */
+    overflow-y: auto;
 }
 
 .market-panel {
-    grid-column: 1 / -1; /* Span full width */
+    grid-column: 1 / -1;
     min-height: 350px;
 }
 
+/* ... (Previous Styles) ... */
+
+/* Search Section */
+.search-section {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+
+.search-box {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #2a2a3e;
+    border: 1px solid #444;
+    border-radius: 6px;
+    list-style: none;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100;
+    display: none; /* Hidden by default */
+}
+
+.search-results li {
+    padding: 0.8rem;
+    cursor: pointer;
+    border-bottom: 1px solid #333;
+    transition: background 0.2s;
+}
+
+.search-results li:hover {
+    background-color: #3d5afe;
+}
+
+.search-match {
+    color: var(--text-primary);
+    font-weight: bold;
+}
+
+.search-sub {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-left: 0.5rem;
+}
+
+/* Stock Info Card */
+.stock-info-card {
+    background: #252530;
+    border: 1px solid var(--accent-blue);
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    animation: fadeIn 0.3s;
+}
+
+.info-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.info-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    border: none;
+}
+
+.code-badge {
+    background: #333;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.info-price-row {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0.5rem 0;
+}
+
+.currency {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.change-rate {
+    font-size: 1rem;
+    margin-left: 0.5rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(0,0,0,0.2);
+}
+
+.updated-time {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* ... (Rest of Common Styles) ... */
 .panel-header-row {
     display: flex;
     justify-content: space-between;
@@ -173,6 +282,12 @@ input:focus {
 
 .btn-primary:hover {
     background-color: #304ffe;
+}
+
+.btn-primary:disabled {
+    background-color: #444;
+    cursor: not-allowed;
+    color: #888;
 }
 
 /* Table Styles */
