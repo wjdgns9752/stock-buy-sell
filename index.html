@@ -6,6 +6,7 @@
     <title>StockSell - 한국 주식 자동매매 시스템</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -17,6 +18,26 @@
         </header>
 
         <main class="dashboard-grid">
+            <!-- Market Overview Panel (New) -->
+            <section class="card market-panel">
+                <h2>📊 실시간 시장 급등/급락 (Naver Finance)</h2>
+                <div class="market-content">
+                    <div class="chart-container">
+                        <canvas id="marketChart"></canvas>
+                    </div>
+                    <div class="movers-list">
+                        <h3>🔥 급등 종목 Top 5</h3>
+                        <ul id="top-risers">
+                            <li>데이터 로딩중...</li>
+                        </ul>
+                        <h3 class="fall-header">💧 급락 종목 Top 5</h3>
+                        <ul id="top-fallers">
+                            <li>데이터 로딩중...</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
             <!-- Left Panel: Strategy Configuration -->
             <section class="card config-panel">
                 <h2>📈 매매 전략 설정</h2>

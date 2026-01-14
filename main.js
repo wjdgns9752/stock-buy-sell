@@ -13,6 +13,108 @@ const toggleSimBtn = document.getElementById('toggleSim');
 const btnSearch = document.getElementById('btn-search');
 const inputCode = document.getElementById('stockCode');
 
+// --- Naver Finance API & Chart Logic ---
+async function updateMarketDashboard() {
+    try {
+        const proxyUrl = 'https://corsproxy.io/?';
+        // Fetch Top Risers (KOSPI)
+        const riseUrl = 'https://m.stock.naver.com/api/json/sise/siseListJson.nhn?menu=rise&sosok=0';
+        // Fetch Top Fallers (KOSPI)
+        const fallUrl = 'https://m.stock.naver.com/api/json/sise/siseListJson.nhn?menu=fall&sosok=0';
+
+        const [riseRes, fallRes] = await Promise.all([
+            fetch(proxyUrl + encodeURIComponent(riseUrl)),
+            fetch(proxyUrl + encodeURIComponent(fallUrl))
+        ]);
+
+        const riseData = await riseRes.json();
+        const fallData = await fallRes.json();
+
+        // Extract Top 5 items
+        const topRisers = riseData.result.itemList.slice(0, 5);
+        const topFallers = fallData.result.itemList.slice(0, 5);
+
+        renderMoversList(topRisers, topFallers);
+        renderMarketChart(topRisers, topFallers);
+
+    } catch (error) {
+        console.error("Failed to fetch market data:", error);
+        document.getElementById('top-risers').innerHTML = '<li>데이터 로드 실패</li>';
+    }
+}
+
+function renderMoversList(risers, fallers) {
+    const riseList = document.getElementById('top-risers');
+    const fallList = document.getElementById('top-fallers');
+
+    const createItem = (item, isRise) => `
+        <li>
+            <span>${item.nm}</span>
+            <span class="${isRise ? 'up' : 'down'}">
+                ${isRise ? '+' : ''}${item.rate}%
+            </span>
+        </li>
+    `;
+
+    riseList.innerHTML = risers.map(item => createItem(item, true)).join('');
+    fallList.innerHTML = fallers.map(item => createItem(item, false)).join('');
+}
+
+let marketChartInstance = null;
+
+function renderMarketChart(risers, fallers) {
+    const ctx = document.getElementById('marketChart').getContext('2d');
+    
+    // Combine data for chart: Top 3 Risers and Top 3 Fallers
+    const chartItems = [...risers.slice(0, 5), ...fallers.slice(0, 5)];
+    const labels = chartItems.map(item => item.nm);
+    const dataPoints = chartItems.map(item => parseFloat(item.rate));
+    const colors = dataPoints.map(val => val >= 0 ? '#ff3d00' : '#3d5afe'); // Red for + (KR), Blue for -
+
+    if (marketChartInstance) {
+        marketChartInstance.destroy();
+    }
+
+    marketChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '등락률 (%)',
+                data: dataPoints,
+                backgroundColor: colors,
+                borderColor: colors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: '#333' },
+                    ticks: { color: '#a0a0a0' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#a0a0a0' }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.parsed.y + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
 // --- API Logic ---
 async function fetchStockPrice(symbol) {
     try {
@@ -101,7 +203,8 @@ class TradeBot {
 function init() {
     loadState();
     renderBots();
-    startSimulation(); // Keeping simulation for demo as real-time streaming requires WebSocket/Backend
+    startSimulation(); 
+    updateMarketDashboard(); // Load market data on startup
     
     form.addEventListener('submit', handleFormSubmit);
     toggleSimBtn.addEventListener('click', toggleSimulation);
