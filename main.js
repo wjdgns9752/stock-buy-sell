@@ -1,11 +1,13 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { NHApi } from "./nh_api.js";
 
 // State Management
 const state = {
     bots: [],
     isSimulationRunning: true,
     simulationInterval: null,
-    marketData: { risers: [], fallers: [] }
+    marketData: { risers: [], fallers: [] },
+    nhApi: new NHApi() // Initialize NH API Wrapper
 };
 
 // DOM Elements
@@ -16,6 +18,12 @@ const toggleSimBtn = document.getElementById('toggleSim');
 const btnAnalyze = document.getElementById('btn-analyze');
 const aiResultBox = document.getElementById('ai-result');
 const aiText = document.getElementById('ai-text');
+
+// Account Modal Elements
+const btnLinkAccount = document.getElementById('btn-link-account');
+const accountModal = document.getElementById('accountModal');
+const closeModal = document.querySelector('.close-modal');
+const nhAuthForm = document.getElementById('nh-auth-form');
 
 // New Search Elements
 const searchInput = document.getElementById('searchInput');
@@ -30,6 +38,67 @@ const btnAddStrategy = document.getElementById('btnAddStrategy');
 const hiddenCode = document.getElementById('stockCode');
 const hiddenName = document.getElementById('stockName');
 const hiddenBasePrice = document.getElementById('basePrice');
+
+// --- Account Linking Logic ---
+if (btnLinkAccount) {
+    btnLinkAccount.addEventListener('click', () => {
+        accountModal.style.display = 'block';
+        // Pre-fill if exists
+        document.getElementById('nhAppKey').value = state.nhApi.appKey;
+        document.getElementById('nhAppSecret').value = state.nhApi.appSecret;
+        document.getElementById('nhAccount').value = state.nhApi.accountNo;
+    });
+}
+
+if (closeModal) {
+    closeModal.addEventListener('click', () => {
+        accountModal.style.display = 'none';
+    });
+}
+
+// Close modal on click outside
+window.addEventListener('click', (e) => {
+    if (e.target == accountModal) {
+        accountModal.style.display = 'none';
+    }
+});
+
+if (nhAuthForm) {
+    nhAuthForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const key = document.getElementById('nhAppKey').value;
+        const secret = document.getElementById('nhAppSecret').value;
+        const acc = document.getElementById('nhAccount').value;
+
+        // Save credentials
+        state.nhApi.saveCredentials(key, secret, acc);
+        
+        // Test Token Generation
+        const submitBtn = nhAuthForm.querySelector('button');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = "연동 테스트 중...";
+        
+        try {
+            const token = await state.nhApi.getAccessToken();
+            if (token) {
+                alert("연동 성공! 토큰이 발급되었습니다.");
+                accountModal.style.display = 'none';
+                btnLinkAccount.textContent = "✅ 나무 증권 연동됨";
+                btnLinkAccount.style.backgroundColor = "#00c853";
+            }
+        } catch (error) {
+            alert("연동 실패: " + error.message);
+        } finally {
+            submitBtn.textContent = originalText;
+        }
+    });
+}
+
+// Check initial status
+if (state.nhApi.isAuthenticated()) {
+    btnLinkAccount.textContent = "✅ 나무 증권 연동됨";
+}
+
 
 // --- Naver Stock Search & Data Logic ---
 
@@ -51,13 +120,23 @@ if (searchInput) {
 
 async function fetchStockSearchResults(query) {
     try {
-        const proxyUrl = 'https://corsproxy.io/?';
-        // Naver Mobile AutoComplete API
+        // Primary Proxy
+        let proxyUrl = 'https://corsproxy.io/?';
+        // Fallback Proxy if first one fails often
+        const fallbackProxy = 'https://api.allorigins.win/raw?url=';
+        
         const targetUrl = `https://ac.finance.naver.com/ac?q=${encodeURIComponent(query)}&q_enc=euc-kr&st=111&r_format=json&r_enc=utf-8`;
         
-        const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
+        let response;
+        try {
+            response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
+            if (!response.ok) throw new Error('Proxy 1 failed');
+        } catch (e) {
+            console.warn("Primary proxy failed, trying fallback...");
+            response = await fetch(fallbackProxy + encodeURIComponent(targetUrl));
+        }
+
         const data = await response.json();
-        
         const items = data.items[0]; 
         renderSearchResults(items);
 
@@ -100,7 +179,6 @@ async function selectStock(code, name) {
 async function fetchStockDetails(code, name) {
     try {
         const proxyUrl = 'https://corsproxy.io/?';
-        // Naver Stock Basic Info API
         const targetUrl = `https://m.stock.naver.com/api/stock/${code}/basic`;
         
         const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
@@ -323,16 +401,44 @@ class TradeBot {
         }
     }
 
-    executeBuy() {
+    async executeBuy() {
         this.status = 'holding';
         this.buyPrice = this.currentPrice;
-        addLog(this.name, '매수', this.currentPrice, this.quantity);
+        
+        // NH Real Order Logic
+        let logSuffix = "";
+        if (state.nhApi.isAuthenticated()) {
+            try {
+                const result = await state.nhApi.placeOrder(this.symbol, 'buy', this.currentPrice, this.quantity);
+                logSuffix = result.success ? " [NH체결]" : " [NH실패]";
+            } catch (e) {
+                logSuffix = " [NH오류]";
+            }
+        } else {
+            logSuffix = " (모의)";
+        }
+
+        addLog(this.name, '매수', this.currentPrice, this.quantity, logSuffix);
         renderBots();
     }
 
-    executeSell() {
+    async executeSell() {
         this.status = 'sold';
-        addLog(this.name, '매도', this.currentPrice, this.quantity);
+        
+        // NH Real Order Logic
+        let logSuffix = "";
+        if (state.nhApi.isAuthenticated()) {
+            try {
+                const result = await state.nhApi.placeOrder(this.symbol, 'sell', this.currentPrice, this.quantity);
+                logSuffix = result.success ? " [NH체결]" : " [NH실패]";
+            } catch (e) {
+                logSuffix = " [NH오류]";
+            }
+        } else {
+            logSuffix = " (모의)";
+        }
+
+        addLog(this.name, '매도', this.currentPrice, this.quantity, logSuffix);
         renderBots();
     }
 }
@@ -429,7 +535,7 @@ function renderBots() {
     });
 }
 
-function addLog(name, type, price, qty) {
+function addLog(name, type, price, qty, suffix = "") {
     if (!tradeLog) return;
     const li = document.createElement('li');
     li.className = 'log-item';
@@ -439,7 +545,7 @@ function addLog(name, type, price, qty) {
     li.innerHTML = `
         <span class="log-time">${time}</span>
         <span class="log-action ${type === '매수' ? 'buy' : 'sell'}">${type}</span>
-        ${name} ${qty}주 @ ${Math.floor(price).toLocaleString()}원 (총 ${total}원)
+        ${name} ${qty}주 @ ${Math.floor(price).toLocaleString()}원 (총 ${total}원)${suffix}
     `;
     
     const emptyMsg = tradeLog.querySelector('.empty-log');

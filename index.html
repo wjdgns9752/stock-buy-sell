@@ -19,10 +19,37 @@
     <div class="app-container">
         <header class="top-bar">
             <div class="logo">StockSell <span>Auto</span></div>
-            <div class="status-indicator">
-                <span class="dot active"></span> 시스템 가동중
+            <div class="header-controls">
+                <button id="btn-link-account" class="btn-account">🔗 나무 증권 연동</button>
+                <div class="status-indicator">
+                    <span class="dot active"></span> 시스템 가동중
+                </div>
             </div>
         </header>
+
+        <!-- Account Settings Modal -->
+        <div id="accountModal" class="modal" style="display:none;">
+            <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <h2>🏦 NH투자증권(나무) API 설정</h2>
+                <p class="modal-note">* NH투자증권 Open API Key가 필요합니다.</p>
+                <form id="nh-auth-form">
+                    <div class="input-group">
+                        <label>App Key</label>
+                        <input type="text" id="nhAppKey" placeholder="Open API App Key" required>
+                    </div>
+                    <div class="input-group">
+                        <label>App Secret</label>
+                        <input type="password" id="nhAppSecret" placeholder="Open API Secret Key" required>
+                    </div>
+                    <div class="input-group">
+                        <label>계좌번호 (종합매매)</label>
+                        <input type="text" id="nhAccount" placeholder="12345678-01" required>
+                    </div>
+                    <button type="submit" class="btn-primary">연동 저장 및 테스트</button>
+                </form>
+            </div>
+        </div>
 
         <main class="dashboard-grid">
             <!-- Market Overview Panel (New) -->
